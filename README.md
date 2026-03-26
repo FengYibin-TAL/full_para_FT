@@ -2,6 +2,11 @@
 
 基于 **Hugging Face Transformers** 与 **TRL** 的入门示例：在对话式数据上对 **Qwen** 系列模型做 SFT，任务为从给定文本中抽取关键词（分号分隔等形式）。
 
+**详细项目讲解（分步说明）**：
+
+- 全参：`项目讲解_全参SFT_Qwen3-0.6B.md`
+- LoRA：`项目讲解_LoRA_SFT_Qwen3-8B.md`
+
 ## 项目结构
 
 | 路径 | 说明 |
@@ -10,8 +15,10 @@
 | `data/keywords_data_test.jsonl` | 验证/测试集 |
 | `sft-helloworld-train.ipynb` | **全参微调**：`Qwen/Qwen3-0.6B` + `SFTTrainer` |
 | `sft-helloworld-inference.ipynb` | 加载全参微调产物并推理 |
-| `sft-LoRA-train.ipynb` | **LoRA 微调**：`Qwen/Qwen3-8B` + PEFT |
-| `sft-LoRA-inference.ipynb` | LoRA 微调产物推理 |
+| `sft-LoRA-train.ipynb` | **LoRA 微调**：`Qwen/Qwen3-8B` + PEFT + `SFTTrainer` |
+| `sft-LoRA-inference.ipynb` | 基座 + 适配器加载，`merge_and_unload` 后推理（可选导出合并模型） |
+| `项目讲解_全参SFT_Qwen3-0.6B.md` | 全参流程说明 |
+| `项目讲解_LoRA_SFT_Qwen3-8B.md` | LoRA 流程说明 |
 
 ## 数据格式
 
@@ -65,11 +72,35 @@ Notebook 中默认设置示例：
 
 打开 `sft-helloworld-inference.ipynb`，将 `model_name` 指向微调后的目录（默认 `.../sft-full/best`），执行加载与生成单元。
 
-### 4. LoRA 微调
+### 4. LoRA 微调（Qwen3-8B）
 
-打开 `sft-LoRA-train.ipynb`：在 `Qwen3-8B` 上配置 `LoraConfig` 与 `SFTTrainer`。默认 `output_dir` 为 `/root/autodl-tmp/sft/Qwen3-8B/sft-LoRA`（请按显卡显存与磁盘调整）。
+打开 **`sft-LoRA-train.ipynb`**，建议按下列顺序操作（详见 **`项目讲解_LoRA_SFT_Qwen3-8B.md`**）。
 
-> 若需与全参 Notebook 一致的 TensorBoard 行为，请同样设置 `report_to="tensorboard"` 与 `TENSORBOARD_LOGGING_DIR`，勿单独依赖 `logging_dir`。
+1. **环境与依赖**  
+   - 设置 `HF_ENDPOINT`、`HF_HOME`（与全参相同思路）。  
+   - 运行：`!pip install peft trl datasets`  
+   - **安装完成后必须「重启内核（Restart Kernel）」**，再从上到下执行后续单元。  
+     原因：若在未安装 `peft` 时已经 `import` 过 `trl`/`transformers`，仅靠 `importlib.reload` 可能在 **保存 checkpoint** 时触发 **`PicklingError`（如 `SchedulerType`）**。
+
+2. **训练**  
+   - 加载 **`Qwen/Qwen3-8B`**（Notebook 中为 `bfloat16`）。  
+   - 数据与全参相同：`data/*.jsonl` → `messages`。  
+   - **`LoraConfig`**（`r`、`lora_alpha`、`target_modules="all-linear"` 等）+ **`SFTTrainer(..., peft_config=...)`**。  
+   - **`report_to="tensorboard"`** + 环境变量 **`TENSORBOARD_LOGGING_DIR=/root/tf-logs`**（勿只写已废弃的 `logging_dir`）。
+
+3. **默认路径（可按机器修改）**  
+   - 检查点目录：`/root/autodl-tmp/.autodl/sft/Qwen3-8B/sft-LoRA`  
+   - 脚本中另存适配器：`.../sft-LoRA/best`
+
+4. **显存**  
+   - LoRA **不会**按比例砍掉 8B 前向所需的激活 / logits 显存；若 OOM，请减小 **`per_device_train_batch_size`**、设置 **`max_length`**、开启 **`gradient_checkpointing`**，或增大 **`gradient_accumulation_steps`** 维持等效 batch。
+
+### 5. LoRA 推理
+
+打开 **`sft-LoRA-inference.ipynb`**：
+
+- 加载与训练一致的基座 **`Qwen/Qwen3-8B`**，再用 **`PeftModel.from_pretrained(base_model, ".../sft-LoRA/best")`** 挂载适配器。  
+- **`merge_and_unload()`** 后得到合并模型即可 `generate`；Notebook 中可选将合并结果 **`save_pretrained`** 到 `.../sft-LoRA/merged` 便于单目录部署。
 
 ## 注意事项
 

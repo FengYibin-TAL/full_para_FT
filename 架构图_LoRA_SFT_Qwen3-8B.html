@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qwen3-8B LoRA SFT 系统架构图</title>
+  <style>
+    :root {
+      --bg: #f4f0e8;
+      --paper: #fffaf2;
+      --panel: #fffdf8;
+      --stroke: #d8cfc2;
+      --text: #2f261e;
+      --muted: #72675a;
+      --accent: #0f766e;
+      --accent-2: #8b5cf6;
+      --warm: #c2410c;
+      --ok: #15803d;
+      --shadow: 0 18px 42px rgba(68, 45, 22, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Noto Serif SC", "Source Han Serif SC", "PingFang SC", "Microsoft YaHei", serif;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.75)),
+        radial-gradient(circle at 20% 10%, rgba(15, 118, 110, 0.1), transparent 20%),
+        radial-gradient(circle at 85% 18%, rgba(139, 92, 246, 0.08), transparent 20%),
+        linear-gradient(180deg, #efe8dd 0%, #f8f4ee 100%);
+    }
+
+    .wrap {
+      width: min(1680px, 96vw);
+      margin: 0 auto;
+      padding: 28px 18px 42px;
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .header-card,
+    .metric-card,
+    .panel,
+    .aside-card {
+      background: rgba(255, 252, 246, 0.96);
+      border: 1px solid rgba(216, 207, 194, 0.96);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .header-card {
+      padding: 24px 26px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.1);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 31px;
+      line-height: 1.2;
+    }
+
+    .desc {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .metric-card {
+      padding: 18px 20px;
+      display: grid;
+      gap: 12px;
+      align-content: center;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.3px;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.48fr 0.52fr;
+      gap: 18px;
+    }
+
+    .main {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--accent-2);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .grid-5,
+    .grid-4,
+    .grid-3,
+    .grid-2 {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .box {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(249,245,238,0.96));
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      padding: 16px 16px 14px;
+      min-height: 170px;
+    }
+
+    .box::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 16px 0 0 16px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    }
+
+    .box.warm::before {
+      background: linear-gradient(180deg, var(--warm), var(--accent-2));
+    }
+
+    .box.ok::before {
+      background: linear-gradient(180deg, var(--ok), var(--accent));
+    }
+
+    .box-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .box-sub {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+
+    .box ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.72;
+      font-size: 13px;
+    }
+
+    .arrows {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      text-align: center;
+      font-size: 27px;
+      color: var(--accent);
+      font-weight: 800;
+      margin: 6px 4px 0;
+    }
+
+    .arrows.two {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .note {
+      margin-top: 10px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(194, 65, 12, 0.08);
+      border: 1px solid rgba(194, 65, 12, 0.18);
+      color: #8a3d12;
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .aside {
+      display: grid;
+      gap: 18px;
+    }
+
+    .aside-card {
+      padding: 18px;
+    }
+
+    .aside-card h3 {
+      margin: 0 0 12px;
+      font-size: 17px;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px 13px;
+      background: rgba(255,255,255,0.65);
+    }
+
+    .meta-key {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .meta-value {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.7;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid var(--stroke);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .legend-dot.b { background: var(--accent-2); }
+    .legend-dot.c { background: var(--warm); }
+    .legend-dot.d { background: var(--ok); }
+
+    @media (max-width: 1320px) {
+      .layout,
+      .header {
+        grid-template-columns: 1fr;
+      }
+      .grid-5,
+      .grid-4,
+      .grid-3,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .arrows,
+      .arrows.two {
+        grid-template-columns: 1fr;
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="header">
+      <div class="header-card">
+        <div class="eyebrow">系统架构图 · LoRA 参数高效微调</div>
+        <h1>Qwen3-8B LoRA SFT 系统架构</h1>
+        <p class="desc">
+          本架构图对应 `sft-LoRA-train.ipynb` 与 `sft-LoRA-inference.ipynb`。
+          核心目标是把“8B 基座模型 + 对话式关键词抽取数据 + PEFT LoRA 注入 + SFTTrainer 训练 + adapter 保存 +
+          merge 推理导出”组织成一条清晰且闭环的工程链路。相比全参版本，此架构的关键差异在于：
+          训练阶段只更新 LoRA 适配器参数，推理阶段可选择“基座+adapter”或“merge 后单模型”两种部署形态。
+        </p>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">基座模型</div>
+        <div class="metric-value">Qwen/Qwen3-8B</div>
+        <div class="metric-label">训练范式</div>
+        <div class="metric-value">PEFT LoRA + TRL SFTTrainer</div>
+        <div class="metric-label">关键输出</div>
+        <div class="metric-value">adapter 目录 `best` + 可选 merged 模型</div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="main">
+        <div class="panel">
+          <div class="panel-title"><span class="badge">1</span>训练准备与依赖约束</div>
+          <div class="grid-4">
+            <div class="box ok">
+              <div class="box-title">环境初始化</div>
+              <div class="box-sub">先定义下载与缓存环境，再安装依赖</div>
+              <ul>
+                <li>设置 `HF_ENDPOINT`</li>
+                <li>设置 `HF_HOME`</li>
+                <li>确保模型缓存落在数据盘</li>
+              </ul>
+            </div>
+            <div class="box">
+              <div class="box-title">依赖安装</div>
+              <div class="box-sub">LoRA 训练链条必须具备完整 PEFT 生态</div>
+              <ul>
+                <li>安装 `peft`</li>
+                <li>安装 `trl`、`datasets`</li>
+                <li>后续由 `SFTTrainer` 统一调用</li>
+              </ul>
+            </div>
+            <div class="box warm">
+              <div class="box-title">内核重启约束</div>
+              <div class="box-sub">LoRA Notebook 的工程关键约束</div>
+              <ul>
+                <li>pip 后必须 `Restart Kernel`</li>
+                <li>避免 `peft` 未装时已导入 `trl`</li>
+                <li>避免 reload 导致 `PicklingError`</li>
+              </ul>
+            </div>
+            <div class="box">
+              <div class="box-title">TRL 导入点</div>
+              <div class="box-sub">在干净内核里再导入训练器</div>
+              <ul>
+                <li>`from trl import SFTConfig, SFTTrainer`</li>
+                <li>此时 `get_peft_model` 可正常解析</li>
+                <li>训练器状态保持一致</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span class="badge">2</span>训练核心链路</div>
+          <div class="grid-5">
+            <div class="box">
+              <div class="box-title">基座模型层</div>
+              <div class="box-sub">8B 模型提供基础语言理解与生成能力</div>
+              <ul>
+                <li>加载 `Qwen3-8B`</li>
+                <li>加载 `AutoTokenizer`</li>
+                <li>训练侧使用 `bfloat16`</li>
+              </ul>
+            </div>
+            <div class="box">
+              <div class="box-title">数据映射层</div>
+              <div class="box-sub">业务样本转换为 chat training 格式</div>
+              <ul>
+                <li>读取 `train/test` JSONL</li>
+                <li>`conversation` 转 `messages`</li>
+                <li>清理无关字段</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <div class="box-title">LoRA 注入层</div>
+              <div class="box-sub">通过 PEFT 把低秩适配器挂到线性层</div>
+              <ul>
+                <li>`r=4`、`lora_alpha=8`</li>
+                <li>`lora_dropout=0.05`</li>
+                <li>`target_modules="all-linear"`</li>
+              </ul>
+            </div>
+            <div class="box warm">
+              <div class="box-title">SFT 调度层</div>
+              <div class="box-sub">控制训练、评估、保存与日志</div>
+              <ul>
+                <li>`max_steps=1000`</li>
+                <li>`save/eval/logging` 按 step 调度</li>
+                <li>`report_to="tensorboard"`</li>
+              </ul>
+            </div>
+            <div class="box">
+              <div class="box-title">adapter 输出层</div>
+              <div class="box-sub">训练结果先以 LoRA adapter 形态保存</div>
+              <ul>
+                <li>checkpoint 保存到 `output_dir`</li>
+                <li>最终导出 `.../sft-LoRA/best`</li>
+                <li>供 `PeftModel.from_pretrained` 使用</li>
+              </ul>
+            </div>
+          </div>
+          <div class="arrows">
+            <div>→</div>
+            <div>→</div>
+            <div>→</div>
+            <div>→</div>
+          </div>
+          <div class="note">
+            逻辑重点：LoRA 架构并不是替换基座模型，而是“在基座之上附加 adapter 训练层”。
+            因此训练输出首先是 adapter，而不是直接得到一个完整的新基座目录。
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span class="badge">3</span>推理与部署链路</div>
+          <div class="grid-4">
+            <div class="box">
+              <div class="box-title">推理环境层</div>
+              <div class="box-sub">推理侧同样需要 `peft`</div>
+              <ul>
+                <li>设置 `HF_ENDPOINT` / `HF_HOME`</li>
+                <li>确保可加载原始基座</li>
+                <li>安装 `peft` 供 adapter 挂载</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <div class="box-title">基座 + adapter 复原层</div>
+              <div class="box-sub">恢复训练后的完整语义能力</div>
+              <ul>
+                <li>先加载 `Qwen3-8B` 基座</li>
+                <li>再 `PeftModel.from_pretrained(.../best)`</li>
+                <li>推理侧当前使用 `float16`</li>
+              </ul>
+            </div>
+            <div class="box warm">
+              <div class="box-title">Merge 层</div>
+              <div class="box-sub">把 adapter 合并回基座，便于单目录部署</div>
+              <ul>
+                <li>`merge_and_unload()`</li>
+                <li>得到 `merged_model`</li>
+                <li>后续 `generate()` 直接基于合并模型</li>
+              </ul>
+            </div>
+            <div class="box">
+              <div class="box-title">结果与导出层</div>
+              <div class="box-sub">完成业务输出与可选部署产物保存</div>
+              <ul>
+                <li>`apply_chat_template` + `generate`</li>
+                <li>切分 thinking / content</li>
+                <li>可 `save_pretrained(.../merged)`</li>
+              </ul>
+            </div>
+          </div>
+          <div class="arrows">
+            <div>→</div>
+            <div>→</div>
+            <div>→</div>
+            <div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span class="badge">4</span>系统闭环与资源约束</div>
+          <div class="grid-2">
+            <div class="box warm">
+              <div class="box-title">资源敏感点</div>
+              <div class="box-sub">LoRA 并不等于完全省显存</div>
+              <ul>
+                <li>8B 前向仍占大量激活与 logits 显存</li>
+                <li>`per_device_train_batch_size` 是首要调节点</li>
+                <li>必要时需加 `max_length`、`gradient_checkpointing`、梯度累积</li>
+              </ul>
+            </div>
+            <div class="box ok">
+              <div class="box-title">系统闭环结果</div>
+              <div class="box-sub">训练、验证、推理、导出构成完整工程链</div>
+              <ul>
+                <li>训练侧产出 adapter 与日志</li>
+                <li>推理侧支持即时挂载或合并部署</li>
+                <li>文档、README、Notebook 三者保持一致</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="aside">
+        <div class="aside-card">
+          <h3>关键路径</h3>
+          <div class="meta-list">
+            <div class="meta">
+              <div class="meta-key">训练输出目录</div>
+              <div class="meta-value">`/root/autodl-tmp/.autodl/sft/Qwen3-8B/sft-LoRA`</div>
+            </div>
+            <div class="meta">
+              <div class="meta-key">最佳 adapter</div>
+              <div class="meta-value">`.../sft-LoRA/best`</div>
+            </div>
+            <div class="meta">
+              <div class="meta-key">合并后模型</div>
+              <div class="meta-value">`.../sft-LoRA/merged`</div>
+            </div>
+            <div class="meta">
+              <div class="meta-key">TensorBoard</div>
+              <div class="meta-value">`TENSORBOARD_LOGGING_DIR=/root/tf-logs`</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside-card">
+          <h3>核心区别</h3>
+          <div class="meta-list">
+            <div class="meta">
+              <div class="meta-key">与全参版本相比</div>
+              <div class="meta-value">训练时不直接更新全部基座权重，而是通过 `LoraConfig` 注入 adapter 进行参数高效微调。</div>
+            </div>
+            <div class="meta">
+              <div class="meta-key">部署形态</div>
+              <div class="meta-value">可保留“基座 + adapter”组合，也可 merge 为单模型目录，适应不同部署策略。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside-card">
+          <h3>图例</h3>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-dot"></span>主处理链路</div>
+            <div class="legend-item"><span class="legend-dot b"></span>LoRA/适配器相关</div>
+            <div class="legend-item"><span class="legend-dot c"></span>风险或资源敏感点</div>
+            <div class="legend-item"><span class="legend-dot d"></span>稳定产物输出</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </div>
+</body>
+</html>

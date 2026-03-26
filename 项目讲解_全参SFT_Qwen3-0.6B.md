@@ -46,7 +46,7 @@
 
 ### 2.3 非目标（边界）
 
-- 本文档**不**展开 LoRA/QLoRA（同目录另有 `sft-LoRA-*.ipynb` 可参考）。
+- LoRA/QLoRA 的完整分步说明见 **`项目讲解_LoRA_SFT_Qwen3-8B.md`**（对应 `sft-LoRA-*.ipynb`）。
 - **不**涵盖模型上线、量化、推理服务框架（vLLM 等），仅到「训练 + Notebook 推理」。
 
 ---

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qwen3-0.6B 全参SFT系统架构图</title>
+  <style>
+    :root {
+      --bg: #0d1321;
+      --panel: #151e33;
+      --panel-2: #1d2742;
+      --line: #6ee7f9;
+      --line-2: #f59e0b;
+      --text: #e5eefc;
+      --muted: #a9b8d6;
+      --accent: #8b5cf6;
+      --ok: #34d399;
+      --warn: #f59e0b;
+      --danger: #fb7185;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(139, 92, 246, 0.18), transparent 26%),
+        radial-gradient(circle at top right, rgba(110, 231, 249, 0.14), transparent 24%),
+        linear-gradient(180deg, #0b1020 0%, #10192b 100%);
+      color: var(--text);
+    }
+
+    .wrap {
+      width: min(1600px, 96vw);
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .hero-card,
+    .meta-card,
+    .lane,
+    .side-card {
+      background: rgba(21, 30, 51, 0.88);
+      border: 1px solid rgba(169, 184, 214, 0.14);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-card {
+      padding: 24px 26px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.2;
+      letter-spacing: 0.3px;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 15px;
+    }
+
+    .meta-card {
+      padding: 18px 20px;
+      display: grid;
+      gap: 10px;
+      align-content: center;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, 0.14);
+      color: #dcd2ff;
+      font-size: 13px;
+      width: fit-content;
+    }
+
+    .meta-title {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .meta-value {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1.4fr 0.6fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .main {
+      display: grid;
+      gap: 18px;
+    }
+
+    .lane {
+      padding: 18px;
+    }
+
+    .lane-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .lane-title span {
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(110, 231, 249, 0.14);
+      color: var(--line);
+      font-size: 13px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      align-items: stretch;
+      position: relative;
+    }
+
+    .flow.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .flow.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .node {
+      position: relative;
+      background: linear-gradient(180deg, rgba(29, 39, 66, 0.96), rgba(23, 31, 51, 0.96));
+      border: 1px solid rgba(169, 184, 214, 0.14);
+      border-radius: 16px;
+      padding: 16px 16px 14px;
+      min-height: 156px;
+      overflow: hidden;
+    }
+
+    .node::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(180deg, var(--line), var(--accent));
+    }
+
+    .node.warn::before {
+      background: linear-gradient(180deg, var(--line-2), var(--danger));
+    }
+
+    .node.ok::before {
+      background: linear-gradient(180deg, var(--ok), var(--line));
+    }
+
+    .node-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .node-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+
+    .node ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .arrow-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 8px 6px 0;
+      color: var(--line);
+      text-align: center;
+      font-size: 28px;
+      font-weight: 800;
+      opacity: 0.95;
+    }
+
+    .side {
+      display: grid;
+      gap: 18px;
+    }
+
+    .side-card {
+      padding: 18px;
+    }
+
+    .side-card h3 {
+      margin: 0 0 12px;
+      font-size: 17px;
+    }
+
+    .kv {
+      display: grid;
+      gap: 10px;
+    }
+
+    .kv-item {
+      padding: 12px 13px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(169, 184, 214, 0.1);
+    }
+
+    .kv-key {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .kv-value {
+      font-size: 14px;
+      line-height: 1.7;
+      font-weight: 700;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--line);
+    }
+
+    .dot.accent { background: var(--accent); }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--line-2); }
+
+    .footer {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.18);
+      color: #f8e6b5;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1200px) {
+      .architecture,
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .flow,
+      .flow.three,
+      .flow.two {
+        grid-template-columns: 1fr;
+      }
+      .arrow-row {
+        grid-template-columns: 1fr;
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="chip">系统架构图 · 全参训练流程</div>
+        <h1>Qwen3-0.6B 全参 SFT 系统架构</h1>
+        <p class="subtitle">
+          本架构图对应 `sft-helloworld-train.ipynb` 与 `sft-helloworld-inference.ipynb`。
+          整体逻辑遵循“环境准备 → 基座模型加载 → 数据集映射 → SFT 训练 → 最优模型保存 → 推理验证”的闭环流程。
+          全参训练的关键特征是：基座模型全部参与反向传播，训练逻辑简单直接，但参数更新范围最大。
+        </p>
+      </div>
+      <div class="meta-card">
+        <div class="meta-title">任务类型</div>
+        <div class="meta-value">关键词抽取 / 指令监督微调</div>
+        <div class="meta-title">基座模型</div>
+        <div class="meta-value">Qwen/Qwen3-0.6B</div>
+        <div class="meta-title">训练范式</div>
+        <div class="meta-value">全参 SFT + TRL SFTTrainer</div>
+      </div>
+    </section>
+
+    <section class="architecture">
+      <div class="main">
+        <div class="lane">
+          <div class="lane-title"><span>1</span>训练主流程</div>
+          <div class="flow">
+            <div class="node ok">
+              <div class="node-title">环境与依赖层</div>
+              <div class="node-sub">Notebook 启动后首先建立运行环境</div>
+              <ul>
+                <li>设置 `HF_ENDPOINT` 与 `HF_HOME`</li>
+                <li>安装 `trl`、`datasets`</li>
+                <li>准备 Hugging Face 缓存目录</li>
+              </ul>
+            </div>
+            <div class="node">
+              <div class="node-title">模型与Tokenizer层</div>
+              <div class="node-sub">构造训练的基础语义表示能力</div>
+              <ul>
+                <li>加载 `AutoModelForCausalLM`</li>
+                <li>加载 `AutoTokenizer`</li>
+                <li>基座为 `Qwen3-0.6B`</li>
+              </ul>
+            </div>
+            <div class="node">
+              <div class="node-title">数据处理层</div>
+              <div class="node-sub">将业务 JSONL 转为 TRL 可消费格式</div>
+              <ul>
+                <li>读取 `train/test` JSONL</li>
+                <li>`conversation` 映射为 `messages`</li>
+                <li>移除冗余字段，保留训练核心列</li>
+              </ul>
+            </div>
+            <div class="node warn">
+              <div class="node-title">SFT 训练层</div>
+              <div class="node-sub">训练器统一调度训练、评估与保存</div>
+              <ul>
+                <li>`SFTConfig` 定义超参数</li>
+                <li>`SFTTrainer` 组织数据与损失计算</li>
+                <li>全量参数参与更新</li>
+              </ul>
+            </div>
+          </div>
+          <div class="arrow-row">
+            <div>→</div>
+            <div>→</div>
+            <div>→</div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-title"><span>2</span>训练控制与输出链路</div>
+          <div class="flow three">
+            <div class="node">
+              <div class="node-title">训练控制策略</div>
+              <div class="node-sub">由 `SFTConfig` 统一定义</div>
+              <ul>
+                <li>`max_steps` 控制训练长度</li>
+                <li>`logging_steps` 决定日志频率</li>
+                <li>`eval_steps` / `save_steps` 驱动评估与保存</li>
+              </ul>
+            </div>
+            <div class="node ok">
+              <div class="node-title">模型产物输出</div>
+              <div class="node-sub">训练完成后进入持久化阶段</div>
+              <ul>
+                <li>checkpoint 写入 `output_dir`</li>
+                <li>`load_best_model_at_end=True` 载入最优权重</li>
+                <li>最终导出 `.../sft-full/best`</li>
+              </ul>
+            </div>
+            <div class="node">
+              <div class="node-title">可观测性</div>
+              <div class="node-sub">训练过程日志可视化</div>
+              <ul>
+                <li>`report_to="tensorboard"`</li>
+                <li>`TENSORBOARD_LOGGING_DIR=/root/tf-logs`</li>
+                <li>事件文件供 TensorBoard 读取</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-title"><span>3</span>推理验证流程</div>
+          <div class="flow two">
+            <div class="node ok">
+              <div class="node-title">推理加载层</div>
+              <div class="node-sub">直接加载训练后的最佳目录</div>
+              <ul>
+                <li>`model_name = .../sft-full/best`</li>
+                <li>加载 tokenizer 与微调后模型</li>
+                <li>推理端与训练端模板保持一致</li>
+              </ul>
+            </div>
+            <div class="node">
+              <div class="node-title">生成与结果解析层</div>
+              <div class="node-sub">把业务输入转为模型输出</div>
+              <ul>
+                <li>`apply_chat_template` 组织提示词</li>
+                <li>`generate()` 生成关键词结果</li>
+                <li>分离 thinking / content，提取最终答案</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          核心逻辑结论：全参 SFT 的系统结构相对直接，训练链路重点在于
+          “基座模型完整更新 + 标准 SFTTrainer 调度 + 最优模型导出”。
+          它的优势是流程清晰、实现门槛低；代价是参数更新范围最大，随着模型规模提升，训练成本也会同步增加。
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="side-card">
+          <h3>关键输入</h3>
+          <div class="kv">
+            <div class="kv-item">
+              <div class="kv-key">数据源</div>
+              <div class="kv-value">`data/keywords_data_train.jsonl` / `data/keywords_data_test.jsonl`</div>
+            </div>
+            <div class="kv-item">
+              <div class="kv-key">业务格式</div>
+              <div class="kv-value">`conversation` → `messages` → chat template → token ids</div>
+            </div>
+            <div class="kv-item">
+              <div class="kv-key">训练目标</div>
+              <div class="kv-value">让模型稳定输出关键词风格字符串</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-card">
+          <h3>关键路径</h3>
+          <div class="kv">
+            <div class="kv-item">
+              <div class="kv-key">缓存目录</div>
+              <div class="kv-value">`HF_HOME=/root/autodl-tmp/hf`</div>
+            </div>
+            <div class="kv-item">
+              <div class="kv-key">训练输出</div>
+              <div class="kv-value">`/root/autodl-tmp/.autodl/sft/Qwen3-0.6B/sft-full`</div>
+            </div>
+            <div class="kv-item">
+              <div class="kv-key">最优模型</div>
+              <div class="kv-value">`.../sft-full/best`</div>
+            </div>
+            <div class="kv-item">
+              <div class="kv-key">日志目录</div>
+              <div class="kv-value">`/root/tf-logs`</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-card">
+          <h3>图例</h3>
+          <div class="legend">
+            <div class="legend-item"><span class="dot ok"></span>稳定输入/输出模块</div>
+            <div class="legend-item"><span class="dot"></span>核心处理链路</div>
+            <div class="legend-item"><span class="dot warn"></span>训练控制与资源敏感区</div>
+            <div class="legend-item"><span class="dot accent"></span>模型语义能力来源</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </div>
+</body>
+</html>
